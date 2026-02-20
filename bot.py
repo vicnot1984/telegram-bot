@@ -11,8 +11,9 @@ from telegram.ext import (
 # ================== НАЛАШТУВАННЯ ==================
 TOKEN = os.environ.get("TOKEN")
 ADMIN_ID = 8007715299
+
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 
@@ -39,7 +40,6 @@ START, RELATIVE, APPLICANT = range(3)
 
 # ================== /start ==================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Кнопку показуємо ТІЛЬКИ користувачу, не адміну
     if update.message.from_user.id == ADMIN_ID:
         await update.message.reply_text("Панель адміністратора активна.")
         return ConversationHandler.END
@@ -91,7 +91,8 @@ async def applicant_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     applicant_text = update.message.text
     relative_text = context.user_data.get("relative_info", "")
 
-    # Збереження в базу
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute(""
+
+    c.execute(
+        "INSERT INTO applications (user_id, user_
