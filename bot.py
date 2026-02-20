@@ -19,7 +19,12 @@ from telegram.ext import (
 # НАЛАШТУВАННЯ
 # ==============================
 
-TOKEN = os.getenv("TOKEN")
+import os
+
+TOKEN = os.environ.get("TOKEN")
+
+print("DEBUG TOKEN:", TOKEN)
+
 ADMIN_ID = 8007715299
 
 DB_NAME = "applications.db"
@@ -219,9 +224,7 @@ async def contact_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==============================
 
 def main():
-    if TOKEN is None:
-        raise ValueError("TOKEN не встановлений у змінних середовища")
-
+   
     init_db()
 
     app = ApplicationBuilder().token(TOKEN).build()
