@@ -4,7 +4,7 @@ from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ConversationHandler, ContextTypes, filters
 
 # -------------------------- НАЛАШТУВАННЯ --------------------------
-TOKEN = 8345565233:AAFvVxbKBeqrXFfK5LEkMDVMGl3peLjCPmU
+TOKEN = "8345565233:AAFvVxbKBeqrXFfK5LEkMDVMGl3peLjCPmU"
 ADMIN_ID = 8007715299  # Вставити свій Telegram ID
 SPAM_LIMIT = 60  # 1 заявка на хвилину
 
