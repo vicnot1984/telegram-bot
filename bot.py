@@ -116,7 +116,11 @@ async def applicant_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await context.bot.send_message(chat_id=ADMIN_ID, text=admin_message)
-    await update.message.reply_text("✅ Заявка прийнята. Очікуйте відповіді.")
+    await update.message.reply_text(
+    f"✅ Заявка прийнята.\n\n"
+    f"📌 Номер вашої заявки: #{app_id}\n\n"
+    f"Збережіть цей номер для відстеження."
+)
 
     return ConversationHandler.END
 
