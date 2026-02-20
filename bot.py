@@ -59,6 +59,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
+    # Видаляємо кнопки після натискання
+    await query.edit_message_reply_markup(reply_markup=None)
+
     await query.message.reply_text(
         "Введіть дані про особу, яку розшукуєте:\n\n"
         "ПІБ\n"
