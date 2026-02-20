@@ -1,6 +1,7 @@
 import sqlite3
 import logging
 import os
+import re
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
@@ -41,7 +42,7 @@ START, RELATIVE, APPLICANT = range(3)
 # ================== /start ==================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.from_user.id == ADMIN_ID:
-        await update.message.reply_text("Панель адміністратора активна.")
+        await update.message.reply_text("Адмін панель активна.")
         return ConversationHandler.END
 
     keyboard = [
@@ -59,7 +60,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    # Видаляємо кнопки після натискання
+    # Прибираємо кнопку після натискання
     await query.edit_message_reply_markup(reply_markup=None)
 
     await query.message.reply_text(
@@ -101,7 +102,6 @@ async def applicant_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "INSERT INTO applications (user_id, user_name, relative_info, applicant_info) VALUES (?, ?, ?, ?)",
         (user_id, user_name, relative_text, applicant_text)
     )
-
     app_id = c.lastrowid
     conn.commit()
     conn.close()
@@ -110,7 +110,9 @@ async def applicant_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🔔 Нова заявка #{app_id}\n"
         f"Від: {user_name}\n\n"
         f"--- ДАНІ ПРО ОСОБУ ---\n{relative_text}\n\n"
-        f"--- ДАНІ ЗАЯВНИКА ---\n{applicant_text}"
+        f"--- ДАНІ ЗАЯВНИКА ---\n{applicant_text}\n\n"
+        f"📌 Відповідь через Reply або напишіть:\n"
+        f"#{app_id} текст повідомлення"
     )
 
     await context.bot.send_message(chat_id=ADMIN_ID, text=admin_message)
@@ -126,6 +128,7 @@ async def forward_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
+    # ---------------- КОРИСТУВАЧ ----------------
     if sender_id != ADMIN_ID:
         c.execute(
             "SELECT id FROM applications WHERE user_id=? ORDER BY id DESC LIMIT 1",
@@ -138,44 +141,30 @@ async def forward_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=ADMIN_ID,
                 text=f"[Заявка #{app_id}] {update.message.from_user.full_name}:\n{text}"
             )
+
+    # ---------------- АДМІН ----------------
     else:
-        c.execute(
-            "SELECT user_id, id FROM applications ORDER BY id DESC LIMIT 1"
-        )
-        row = c.fetchone()
-        if row:
-            user_id, app_id = row
-            await context.bot.send_message(
-                chat_id=user_id,
-                text=f"Відповідь по заявці #{app_id}:\n{text}"
+        app_id = None
+
+        # 1️⃣ Якщо відповідь через Reply
+        if update.message.reply_to_message:
+            match = re.search(r"#(\d+)", update.message.reply_to_message.text)
+            if match:
+                app_id = int(match.group(1))
+
+        # 2️⃣ Якщо написано #ID текст
+        if not app_id:
+            match = re.match(r"#(\d+)\s+(.*)", text)
+            if match:
+                app_id = int(match.group(1))
+                text = match.group(2)
+
+        if app_id:
+            c.execute(
+                "SELECT user_id FROM applications WHERE id=?",
+                (app_id,)
             )
-
-    conn.close()
-
-# ================== MAIN ==================
-def main():
-    init_db()
-
-    if not TOKEN:
-        raise ValueError("TOKEN не встановлений у змінних середовища")
-
-    app = ApplicationBuilder().token(TOKEN).build()
-
-    conv = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
-        states={
-            START: [CallbackQueryHandler(button_handler)],
-            RELATIVE: [MessageHandler(filters.TEXT & ~filters.COMMAND, relative_handler)],
-            APPLICANT: [MessageHandler(filters.TEXT & ~filters.COMMAND, applicant_handler)],
-        },
-        fallbacks=[]
-    )
-
-    app.add_handler(conv)
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_messages))
-
-    print("Bot started...")
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
+            row = c.fetchone()
+            if row:
+                user_id = row[0]
+                await conte
