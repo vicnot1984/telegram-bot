@@ -95,4 +95,84 @@ async def applicant_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     c = conn.cursor()
 
     c.execute(
-        "INSERT INTO applications (user_id, user_
+        "INSERT INTO applications (user_id, user_name, relative_info, applicant_info) VALUES (?, ?, ?, ?)",
+        (user_id, user_name, relative_text, applicant_text)
+    )
+
+    app_id = c.lastrowid
+    conn.commit()
+    conn.close()
+
+    admin_message = (
+        f"🔔 Нова заявка #{app_id}\n"
+        f"Від: {user_name}\n\n"
+        f"--- ДАНІ ПРО ОСОБУ ---\n{relative_text}\n\n"
+        f"--- ДАНІ ЗАЯВНИКА ---\n{applicant_text}"
+    )
+
+    await context.bot.send_message(chat_id=ADMIN_ID, text=admin_message)
+    await update.message.reply_text("✅ Заявка прийнята. Очікуйте відповіді.")
+
+    return ConversationHandler.END
+
+# ================== ДВОСТОРОННІЙ ЧАТ ==================
+async def forward_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    sender_id = update.message.from_user.id
+    text = update.message.text
+
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    if sender_id != ADMIN_ID:
+        c.execute(
+            "SELECT id FROM applications WHERE user_id=? ORDER BY id DESC LIMIT 1",
+            (sender_id,)
+        )
+        row = c.fetchone()
+        if row:
+            app_id = row[0]
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"[Заявка #{app_id}] {update.message.from_user.full_name}:\n{text}"
+            )
+    else:
+        c.execute(
+            "SELECT user_id, id FROM applications ORDER BY id DESC LIMIT 1"
+        )
+        row = c.fetchone()
+        if row:
+            user_id, app_id = row
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=f"Відповідь по заявці #{app_id}:\n{text}"
+            )
+
+    conn.close()
+
+# ================== MAIN ==================
+def main():
+    init_db()
+
+    if not TOKEN:
+        raise ValueError("TOKEN не встановлений у змінних середовища")
+
+    app = ApplicationBuilder().token(TOKEN).build()
+
+    conv = ConversationHandler(
+        entry_points=[CommandHandler("start", start)],
+        states={
+            START: [CallbackQueryHandler(button_handler)],
+            RELATIVE: [MessageHandler(filters.TEXT & ~filters.COMMAND, relative_handler)],
+            APPLICANT: [MessageHandler(filters.TEXT & ~filters.COMMAND, applicant_handler)],
+        },
+        fallbacks=[]
+    )
+
+    app.add_handler(conv)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_messages))
+
+    print("Bot started...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
