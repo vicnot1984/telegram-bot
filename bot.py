@@ -2,10 +2,13 @@ import sqlite3
 import logging
 import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters, ConversationHandler
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler,
+    ContextTypes, filters, ConversationHandler
+)
 
 # ====================== Налаштування ======================
-TOKEN = os.environ.get("TOKEN")
+TOKEN = os.environ.get("TOKEN")  # Telegram Token з BotFather
 ADMIN_ID = 8007715299
 
 logging.basicConfig(
@@ -24,16 +27,14 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
             user_name TEXT,
-            relative_name TEXT,
-            relative_birth TEXT,
-            last_contact TEXT,
-            additional_info TEXT
+            relative_info TEXT,
+            user_info TEXT
         )
     """)
     conn.commit()
     conn.close()
 
-# ====================== Константи для ConversationHandler =========
+# ====================== Conversation states =================
 CHOOSING, RELATIVE_INFO, USER_INFO = range(3)
 
 # ====================== Старт =============================
@@ -74,8 +75,10 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Збереження в базу
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("INSERT INTO applications (user_id, user_name, relative_name, relative_birth, last_contact, additional_info) VALUES (?, ?, ?, ?, ?, ?)",
-              (user_id, user_name, relative_text, '', '', user_text))
+    c.execute("""
+        INSERT INTO applications (user_id, user_name, relative_info, user_info)
+        VALUES (?, ?, ?, ?)
+    """, (user_id, user_name, relative_text, user_text))
     app_id = c.lastrowid
     conn.commit()
     conn.close()
@@ -87,34 +90,37 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Заявка прийнята. Очікуйте відповіді.")
     return ConversationHandler.END
 
-# ====================== Команда відповіді адміну ===================
-async def reply_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.from_user.id != ADMIN_ID:
-        await update.message.reply_text("Ви не маєте доступу.")
-        return
+# ====================== Двосторонній чат ====================
+async def forward_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    sender_id = update.message.from_user.id
+    text = update.message.text
 
-    try:
-        app_id = int(context.args[0])
-        reply_text = " ".join(context.args[1:])
-    except (IndexError, ValueError):
-        await update.message.reply_text("Використання: /reply <application_id> <текст відповіді>")
-        return
-
-    # Отримання user_id
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("SELECT user_id FROM applications WHERE id=?", (app_id,))
-    row = c.fetchone()
-    conn.close()
-
-    if not row:
-        await update.message.reply_text("Заявка не знайдена.")
-        return
-
-    user_id = row[0]
-    # Надсилаємо повідомлення користувачу
-    await context.bot.send_message(chat_id=user_id, text=f"Відповідь на вашу заявку #{app_id}:\n{reply_text}")
-    await update.message.reply_text("Відповідь надіслана.")
+    # Якщо повідомлення від користувача
+    if sender_id != ADMIN_ID:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute("SELECT id FROM applications WHERE user_id=? ORDER BY id DESC LIMIT 1", (sender_id,))
+        row = c.fetchone()
+        conn.close()
+        if row:
+            app_id = row[0]
+            await context.bot.send_message(chat_id=ADMIN_ID,
+                                           text=f"[Заявка #{app_id}] {update.message.from_user.full_name}:\n{text}")
+        else:
+            await update.message.reply_text("Будь ласка, спочатку подайте заявку через /start.")
+    # Якщо повідомлення від адміністратора
+    else:
+        # Адмін надсилає повідомлення на останню заявку (можна доповнити логіку, якщо потрібно кілька заявок)
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute("SELECT user_id, id FROM applications ORDER BY id DESC LIMIT 1")
+        row = c.fetchone()
+        conn.close()
+        if row:
+            user_id, app_id = row
+            await context.bot.send_message(chat_id=user_id, text=f"Відповідь на вашу заявку #{app_id}:\n{text}")
+        else:
+            await update.message.reply_text("Немає активних заявок для відповіді.")
 
 # ====================== Основна функція =====================
 def main():
@@ -132,7 +138,7 @@ def main():
     )
 
     app.add_handler(conv_handler)
-    app.add_handler(CommandHandler("reply", reply_command))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_messages))
 
     print("Bot started...")
     app.run_polling()
