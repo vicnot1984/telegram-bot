@@ -1,175 +1,246 @@
+import os
 import sqlite3
 import time
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ConversationHandler, ContextTypes, filters
-
-# -------------------------- НАЛАШТУВАННЯ --------------------------
-TOKEN = "8345565233:AAFvVxbKBeqrXFfK5LEkMDVMGl3peLjCPmU"
-ADMIN_ID = 8007715299  # Вставити свій Telegram ID
-SPAM_LIMIT = 60  # 1 заявка на хвилину
-
-# -------------------------- СТАНИ --------------------------
-CHOOSE, MISSING_INFO, APPLICANT_INFO, CONTACT_INFO = range(4)
-
-# -------------------------- БАЗА ДАНИХ --------------------------
-conn = sqlite3.connect("applications.db", check_same_thread=False)
-cursor = conn.cursor()
-
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS applications (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    type TEXT,
-    missing_info TEXT,
-    applicant_info TEXT,
-    timestamp INTEGER
+from telegram import (
+    Update,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
 )
-""")
-conn.commit()
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    ConversationHandler,
+    ContextTypes,
+    filters,
+)
 
-# -------------------------- START --------------------------
+# ==============================
+# НАЛАШТУВАННЯ
+# ==============================
+
+TOKEN = os.getenv("TOKEN")
+ADMIN_ID = 8007715299
+
+DB_NAME = "applications.db"
+SPAM_LIMIT_SECONDS = 60
+
+# ==============================
+# СТАНИ ДІАЛОГУ
+# ==============================
+
+CHOOSING, MISSING_INFO, APPLICANT_INFO, CONTACT_INFO = range(4)
+
+# ==============================
+# БАЗА ДАНИХ
+# ==============================
+
+def init_db():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS applications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT,
+            missing_info TEXT,
+            applicant_info TEXT,
+            user_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+# ==============================
+# АНТИСПАМ
+# ==============================
+
+user_last_request = {}
+
+def is_spam(user_id):
+    now = time.time()
+    if user_id in user_last_request:
+        if now - user_last_request[user_id] < SPAM_LIMIT_SECONDS:
+            return True
+    user_last_request[user_id] = now
+    return False
+
+# ==============================
+# /start
+# ==============================
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [["🔎 Пошук родича"], ["📩 Контакт з родичем"]]
+    keyboard = [
+        ["Пошук родича"],
+        ["Контакт з родичем"]
+    ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    await update.message.reply_text("Оберіть дію:", reply_markup=reply_markup)
-    return CHOOSE
 
-# -------------------------- ВИБІР --------------------------
-async def choose(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-
-    # -------------------------- АНТИСПАМ --------------------------
-    cursor.execute(
-        "SELECT timestamp FROM applications WHERE user_id=? ORDER BY id DESC LIMIT 1",
-        (user_id,)
+    await update.message.reply_text(
+        "Оберіть дію:",
+        reply_markup=reply_markup
     )
-    last = cursor.fetchone()
-    if last and time.time() - last[0] < SPAM_LIMIT:
-        await update.message.reply_text("⏳ Ви можете подати нову заявку через 1 хвилину.")
+    return CHOOSING
+
+# ==============================
+# ВИБІР
+# ==============================
+
+async def choose(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+
+    if is_spam(update.message.from_user.id):
+        await update.message.reply_text(
+            "⛔ Ви можете подавати лише 1 заявку на хвилину."
+        )
         return ConversationHandler.END
 
-    choice = update.message.text
-    context.user_data["mode"] = choice
-
-    if "Пошук" in choice:
+    if text == "Пошук родича":
+        context.user_data["type"] = "search"
         await update.message.reply_text(
-            "Введіть дані про особу:\n\n"
-            "ПІБ:\n"
-            "Дата народження:\n"
-            "Місце та дата останнього контакту:",
+            "Введіть ПІБ, дату народження, місце та дату останнього контакту:",
             reply_markup=ReplyKeyboardRemove()
         )
         return MISSING_INFO
-    else:
+
+    elif text == "Контакт з родичем":
+        context.user_data["type"] = "contact"
         await update.message.reply_text(
-            "Введіть інформацію про себе:\n\n"
-            "ПІБ:\n"
-            "Дата народження:\n"
-            "Місце проживання:\n"
-            "Місце роботи:\n"
-            "Ступінь спорідненості:\n"
-            "Telegram-контакт:",
-            reply_markup=ReplyKeyboardRemove()
+            "Введіть:\n\n"
+            "ПІБ\nДата народження\nМісце проживання\n"
+            "Місце роботи\nСтупінь спорідненості\n"
+            "Номер телефону для Telegram:"
         )
         return CONTACT_INFO
 
-# -------------------------- ПОШУК --------------------------
-async def missing_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["missing"] = update.message.text
+    else:
+        await update.message.reply_text("Оберіть кнопку.")
+        return CHOOSING
 
+# ==============================
+# ДАНІ ПРО ЗНИКЛОГО
+# ==============================
+
+async def missing_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["missing_info"] = update.message.text
     await update.message.reply_text(
-        "Тепер введіть інформацію про себе:\n\n"
-        "ПІБ:\n"
-        "Дата народження:\n"
-        "Місце проживання:\n"
-        "Місце роботи:\n"
-        "Ступінь спорідненості:\n"
-        "Telegram-контакт:\n"
-        "Додаткові відомості:"
+        "Введіть інформацію про заявника:\n\n"
+        "ПІБ\nДата народження\nМісце проживання\n"
+        "Місце роботи\nСтупінь спорідненості\n"
+        "Телефон для Telegram\nДодаткові відомості:"
     )
     return APPLICANT_INFO
 
+# ==============================
+# ЗБЕРЕЖЕННЯ ЗАЯВКИ (ПОШУК)
+# ==============================
+
 async def applicant_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    timestamp = int(time.time())
+    applicant_text = update.message.text
+
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
 
     cursor.execute("""
-    INSERT INTO applications (user_id, type, missing_info, applicant_info, timestamp)
-    VALUES (?, ?, ?, ?, ?)
-    """, (user_id, "search", context.user_data["missing"], update.message.text, timestamp))
-    conn.commit()
+        INSERT INTO applications (type, missing_info, applicant_info, user_id)
+        VALUES (?, ?, ?, ?)
+    """, (
+        context.user_data["type"],
+        context.user_data.get("missing_info", ""),
+        applicant_text,
+        update.message.from_user.id
+    ))
 
     app_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
 
-    summary = f"""
-🆕 Заявка №{app_id}
+    summary = (
+        f"🆕 Заявка №{app_id}\n\n"
+        f"🔎 Пошук родича\n\n"
+        f"📌 Дані про особу:\n"
+        f"{context.user_data.get('missing_info')}\n\n"
+        f"👤 Дані заявника:\n"
+        f"{applicant_text}"
+    )
 
-🔎 Пошук родича
-
-📌 Дані про особу:
-{context.user_data['missing']}
-
-👤 Дані заявника:
-{update.message.text}
-"""
-
-    # Надсилаємо адміну підсумок
+    # Надіслати адміну
     await context.bot.send_message(chat_id=ADMIN_ID, text=summary)
 
-    # Пересилаємо адміну оригінальне повідомлення користувача (щоб можна було натиснути "Відповісти")
-    await context.bot.forward_message(chat_id=ADMIN_ID,
-                                      from_chat_id=update.message.chat_id,
-                                      message_id=update.message.message_id)
+    await update.message.reply_text(
+        f"✅ Заявка №{app_id} прийнята. Очікуйте відповіді.",
+        reply_markup=ReplyKeyboardRemove()
+    )
 
-    # Підтвердження користувачу
-    await update.message.reply_text(f"✅ Заявка №{app_id} прийнята. Очікуйте відповіді.")
     return ConversationHandler.END
 
-# -------------------------- КОНТАКТ --------------------------
+# ==============================
+# ЗБЕРЕЖЕННЯ ЗАЯВКИ (КОНТАКТ)
+# ==============================
+
 async def contact_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    timestamp = int(time.time())
+    applicant_text = update.message.text
+
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
 
     cursor.execute("""
-    INSERT INTO applications (user_id, type, missing_info, applicant_info, timestamp)
-    VALUES (?, ?, ?, ?, ?)
-    """, (user_id, "contact", "", update.message.text, timestamp))
-    conn.commit()
+        INSERT INTO applications (type, missing_info, applicant_info, user_id)
+        VALUES (?, ?, ?, ?)
+    """, (
+        context.user_data["type"],
+        "",
+        applicant_text,
+        update.message.from_user.id
+    ))
 
     app_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
 
-    summary = f"""
-🆕 Заявка №{app_id}
+    summary = (
+        f"🆕 Заявка №{app_id}\n\n"
+        f"📞 Контакт з родичем\n\n"
+        f"👤 Дані заявника:\n"
+        f"{applicant_text}"
+    )
 
-📩 Контакт з родичем
-
-👤 Дані заявника:
-{update.message.text}
-"""
-    # Надсилаємо адміну підсумок
     await context.bot.send_message(chat_id=ADMIN_ID, text=summary)
 
-    # Пересилаємо адміну оригінальне повідомлення користувача
-    await context.bot.forward_message(chat_id=ADMIN_ID,
-                                      from_chat_id=update.message.chat_id,
-                                      message_id=update.message.message_id)
+    await update.message.reply_text(
+        f"✅ Заявка №{app_id} прийнята. Очікуйте відповіді.",
+        reply_markup=ReplyKeyboardRemove()
+    )
 
-    await update.message.reply_text(f"✅ Заявка №{app_id} прийнята. Очікуйте відповіді.")
     return ConversationHandler.END
 
-# -------------------------- ЗАПУСК --------------------------
-app = ApplicationBuilder().token(TOKEN).build()
+# ==============================
+# ЗАПУСК
+# ==============================
 
-conv_handler = ConversationHandler(
-    entry_points=[CommandHandler("start", start)],
-    states={
-        CHOOSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose)],
-        MISSING_INFO: [MessageHandler(filters.TEXT & ~filters.COMMAND, missing_info)],
-        APPLICANT_INFO: [MessageHandler(filters.TEXT & ~filters.COMMAND, applicant_info)],
-        CONTACT_INFO: [MessageHandler(filters.TEXT & ~filters.COMMAND, contact_info)],
-    },
-    fallbacks=[]
-)
+def main():
+    if TOKEN is None:
+        raise ValueError("TOKEN не встановлений у змінних середовища")
 
-app.add_handler(conv_handler)
-app.run_polling()
+    init_db()
+
+    app = ApplicationBuilder().token(TOKEN).build()
+
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("start", start)],
+        states={
+            CHOOSING: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose)],
+            MISSING_INFO: [MessageHandler(filters.TEXT & ~filters.COMMAND, missing_info)],
+            APPLICANT_INFO: [MessageHandler(filters.TEXT & ~filters.COMMAND, applicant_info)],
+            CONTACT_INFO: [MessageHandler(filters.TEXT & ~filters.COMMAND, contact_info)],
+        },
+        fallbacks=[],
+    )
+
+    app.add_handler(conv_handler)
+
+    print("Bot started...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
