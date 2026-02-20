@@ -167,4 +167,37 @@ async def forward_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
             row = c.fetchone()
             if row:
                 user_id = row[0]
-                await conte
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text=f"Відповідь по заявці #{app_id}:\n{text}"
+                )
+
+    conn.close()
+
+# ================== MAIN ==================
+def main():
+    init_db()
+
+    if not TOKEN:
+        raise ValueError("TOKEN не встановлений")
+
+    app = ApplicationBuilder().token(TOKEN).build()
+
+    conv = ConversationHandler(
+        entry_points=[CommandHandler("start", start)],
+        states={
+            START: [CallbackQueryHandler(button_handler)],
+            RELATIVE: [MessageHandler(filters.TEXT & ~filters.COMMAND, relative_handler)],
+            APPLICANT: [MessageHandler(filters.TEXT & ~filters.COMMAND, applicant_handler)],
+        },
+        fallbacks=[]
+    )
+
+    app.add_handler(conv)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_messages))
+
+    print("Bot started...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
