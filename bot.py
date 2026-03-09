@@ -12,18 +12,9 @@ from telegram.ext import (
 # ================== НАЛАШТУВАННЯ ==================
 import os
 
-TOKEN = os.environ.get("TELEGRAM_TOKEN")
-ADMIN_ID_STR = os.environ.get("ADMIN_ID")
+TOKEN = 8700459830:AAG2EEf4dK6tWsec5iPRIbG-SiXf2oS62yo
 
-print("TOKEN:", repr(TOKEN))
-print("ADMIN_ID:", repr(ADMIN_ID_STR))
-
-if not TOKEN:
-    raise ValueError("TOKEN не встановлений")
-if not ADMIN_ID_STR:
-    raise ValueError("ADMIN_ID не встановлений")
-
-ADMIN_ID = int(ADMIN_ID_STR)  # конвертуємо в int після перевірки
+ADMIN_ID = 8700459830
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
