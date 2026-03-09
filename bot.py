@@ -8,19 +8,18 @@ from telegram.ext import (
     CallbackQueryHandler, ContextTypes, filters,
     ConversationHandler
 )
-from dotenv import load_dotenv
-
-# Завантаження .env
-load_dotenv()
 
 # ================== НАЛАШТУВАННЯ ==================
+
 TOKEN = os.environ.get("TOKEN")
-if not TOKEN:
+ADMIN_ID = os.environ.get("ADMIN_ID")
+
+if not TOKEN or TOKEN == "TEST_TOKEN":
     raise ValueError("❌ TOKEN не встановлений або недійсний! Отримайте токен у @BotFather.")
 
-ADMIN_ID = os.environ.get("ADMIN_ID")
 if not ADMIN_ID:
-    raise ValueError("❌ ADMIN_ID не встановлений! Ваш Telegram ID потрібен для адмін-панелі.")
+    raise ValueError("❌ ADMIN_ID не встановлений! Вкажіть свій Telegram ID.")
+
 ADMIN_ID = int(ADMIN_ID)
 
 logging.basicConfig(
@@ -31,6 +30,7 @@ logging.basicConfig(
 DB_NAME = "applications.db"
 
 # ================== БАЗА ДАНИХ ==================
+
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -47,40 +47,54 @@ def init_db():
     conn.close()
 
 # ================== СТАНИ ==================
+
 START, RELATIVE, APPLICANT = range(3)
 
 # ================== /start ==================
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.from_user.id == ADMIN_ID:
         await update.message.reply_text("Адмін панель активна.")
         return ConversationHandler.END
 
-    keyboard = [[InlineKeyboardButton("Запрос на поиск", callback_data="search")]]
+    keyboard = [
+        [InlineKeyboardButton("Запрос на поиск", callback_data="search")]
+    ]
+
     await update.message.reply_text(
         "Нажмите кнопку для подачи запроса:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
+
     return START
 
 # ================== КНОПКА ==================
+
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     await query.edit_message_reply_markup(reply_markup=None)
+
     await query.message.reply_text(
-        "Введите данные военнослужащего:\nФИО\nДата рождения\nВоинская часть\nДата та место последнего контакта"
+        "Введите данные военнослужащего:\n\n"
+        "ФИО\nДата рождения\nВоинская часть\nДата та место последнего контакта"
     )
     return RELATIVE
 
 # ================== ДАНІ ПРО ОСОБУ ==================
+
 async def relative_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["relative_info"] = update.message.text
+
     await update.message.reply_text(
-        "Введите ваши данные:\nФИО\nДата рождения\nМесто проживания\nМесто работы\nСтепень родства\nНомер телефона\nДополнительные данные"
+        "Введите ваши данные:\n\n"
+        "ФИО\nДата рождения\nМесто проживания\nМесто работы\n"
+        "Степень родства\nНомер телефона\nДополнительные данные"
     )
     return APPLICANT
 
 # ================== ДАНІ ЗАЯВНИКА ==================
+
 async def applicant_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_name = update.message.from_user.full_name
@@ -98,34 +112,44 @@ async def applicant_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn.close()
 
     admin_message = (
-        f"🔔 Нова заявка #{app_id}\n"
-        f"Від: {user_name}\n\n"
+        f"🔔 Нова заявка #{app_id}\nВід: {user_name}\n\n"
         f"--- ДАНІ ПРО ОСОБУ ---\n{relative_text}\n\n"
         f"--- ДАНІ ЗАЯВНИКА ---\n{applicant_text}\n\n"
-        f"📌 Відповідь через Reply або напишіть:\n#{app_id} текст повідомлення"
+        f"📌 Відповідь через Reply або напишіть:\n"
+        f"#{app_id} текст повідомлення"
     )
 
     await context.bot.send_message(chat_id=ADMIN_ID, text=admin_message)
+
     await update.message.reply_text(
-        f"✅ Заявка принята.\n📌 Номер вашей заявки: #{app_id}"
+        f"✅ Заявка принята.\n\n📌 Номер вашей заявки: #{app_id}\nСохраните этот номер."
     )
     return ConversationHandler.END
 
 # ================== ДВОСТОРОННІЙ ЧАТ ==================
+
 async def forward_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sender_id = update.message.from_user.id
     text = update.message.text
+
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
     if sender_id != ADMIN_ID:
-        c.execute("SELECT id FROM applications WHERE user_id=? ORDER BY id DESC LIMIT 1", (sender_id,))
+        c.execute(
+            "SELECT id FROM applications WHERE user_id=? ORDER BY id DESC LIMIT 1",
+            (sender_id,)
+        )
         row = c.fetchone()
         if row:
             app_id = row[0]
             header = f"📩 Повідомлення по заявці #{app_id}\nВід: {update.message.from_user.full_name}\n\n"
             await context.bot.send_message(chat_id=ADMIN_ID, text=header)
-            await context.bot.forward_message(chat_id=ADMIN_ID, from_chat_id=update.message.chat_id, message_id=update.message.message_id)
+            await context.bot.forward_message(
+                chat_id=ADMIN_ID,
+                from_chat_id=update.message.chat_id,
+                message_id=update.message.message_id
+            )
     else:
         app_id = None
         if update.message.reply_to_message:
@@ -143,9 +167,11 @@ async def forward_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if row:
                 user_id = row[0]
                 await context.bot.send_message(chat_id=user_id, text=f"Ответ по заявке #{app_id}:\n{text}")
+
     conn.close()
 
 # ================== MAIN ==================
+
 def main():
     init_db()
     app = ApplicationBuilder().token(TOKEN).build()
@@ -162,7 +188,8 @@ def main():
 
     app.add_handler(conv)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_messages))
-    print("✅ Bot started...")
+
+    print("Bot started...")
     app.run_polling()
 
 if __name__ == "__main__":
