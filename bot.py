@@ -12,7 +12,9 @@ from telegram.ext import (
 # ================== НАЛАШТУВАННЯ ==================
 import os
 
-TOKEN = "8700459830:AAG2EEf4dK6tWsec5iPRIbG-SiXf2oS62yo"
+TOKEN = os.environ.get("TOKEN")
+if not TOKEN:
+    raise ValueError("TOKEN не встановлений")
 
 ADMIN_ID = 8700459830
 
