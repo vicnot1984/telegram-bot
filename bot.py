@@ -1,3 +1,19 @@
+import os
+
+TOKEN = os.getenv("TOKEN")
+ADMIN_ID = os.getenv("ADMIN_ID")
+
+print("TOKEN:", TOKEN)
+print("ADMIN_ID:", ADMIN_ID)
+
+if not TOKEN:
+    raise ValueError("TOKEN не встановлений")
+
+if not ADMIN_ID:
+    raise ValueError("ADMIN_ID не встановлений")
+
+ADMIN_ID = int(ADMIN_ID)
+
 import sqlite3
 import logging
 import os
