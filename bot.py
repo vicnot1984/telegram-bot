@@ -13,11 +13,15 @@ from telegram.ext import (
 import os
 
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
-print("TELEGRAM_TOKEN:", TOKEN)   # Тимчасово для перевірки
+ADMIN_ID = int(os.environ.get("ADMIN_ID"))
+
 if not TOKEN:
     raise ValueError("TOKEN не встановлений")
-    
-ADMIN_ID = 8700459830
+if not ADMIN_ID:
+    raise ValueError("ADMIN_ID не встановлений")
+
+print("TOKEN debug:", repr(TOKEN))
+print("ADMIN_ID debug:", ADMIN_ID)
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
