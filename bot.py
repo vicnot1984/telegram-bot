@@ -1,4 +1,5 @@
 import os
+import sys
 import sqlite3
 import logging
 import re
@@ -9,38 +10,37 @@ from telegram.ext import (
     ConversationHandler
 )
 
-# ================== НАЛАШТУВАННЯ ==================
+# ================== ПЕРЕВІРКА ЗМІННИХ СЕРЕДОВИЩА ==================
 
-# Читання змінних середовища з безпекою
 TOKEN = os.environ.get("TOKEN")
-ADMIN_ID_ENV = os.environ.get("ADMIN_ID")
+ADMIN_ID = os.environ.get("ADMIN_ID")
 
-if not TOKEN:
-    print("⚠️ TOKEN не встановлений. Використовується тестовий токен!")
-    TOKEN = "TEST_TOKEN"
+if not TOKEN or TOKEN == "TEST_TOKEN":
+    print("❌ TOKEN не встановлений або недійсний! Отримайте токен у @BotFather.")
+    sys.exit(1)
 
-if not ADMIN_ID_ENV:
-    print("⚠️ ADMIN_ID не встановлений. Використовується тимчасовий ID!")
-    ADMIN_ID = 123456789  # тимчасовий ID для тесту
-else:
-    try:
-        ADMIN_ID = int(ADMIN_ID_ENV)
-    except ValueError:
-        print(f"⚠️ ADMIN_ID неправильний: {ADMIN_ID_ENV}. Використовується тимчасовий ID!")
-        ADMIN_ID = 123456789
+if not ADMIN_ID:
+    print("❌ ADMIN_ID не встановлений! Вкажіть свій Telegram ID.")
+    sys.exit(1)
 
-print("TOKEN:", TOKEN)
-print("ADMIN_ID:", ADMIN_ID)
+try:
+    ADMIN_ID = int(ADMIN_ID)
+except ValueError:
+    print("❌ ADMIN_ID повинен бути числом!")
+    sys.exit(1)
 
-# Логування
+print(f"✅ TOKEN та ADMIN_ID встановлені. ADMIN_ID = {ADMIN_ID}")
+
+# ================== ЛОГУВАННЯ ==================
+
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 
-DB_NAME = "applications.db"
+# ================== НАЛАШТУВАННЯ БД ==================
 
-# ================== БАЗА ДАНИХ ==================
+DB_NAME = "applications.db"
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -57,21 +57,20 @@ def init_db():
     conn.commit()
     conn.close()
 
-# ================== СТАНИ ==================
+# ================== СТАНИ ДЛЯ CONVERSATION ==================
 
 START, RELATIVE, APPLICANT = range(3)
 
 # ================== /start ==================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.from_user.id == ADMIN_ID:
+    user_id = update.message.from_user.id
+
+    if user_id == ADMIN_ID:
         await update.message.reply_text("Адмін панель активна.")
         return ConversationHandler.END
 
-    keyboard = [
-        [InlineKeyboardButton("Запрос на поиск", callback_data="search")]
-    ]
-
+    keyboard = [[InlineKeyboardButton("Запрос на поиск", callback_data="search")]]
     await update.message.reply_text(
         "Нажмите кнопку для подачи запроса:",
         reply_markup=InlineKeyboardMarkup(keyboard)
@@ -100,7 +99,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def relative_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["relative_info"] = update.message.text
-
     await update.message.reply_text(
         "Введите ваши данные:\n\n"
         "ФИО\n"
@@ -111,7 +109,6 @@ async def relative_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Номер телефона (для связи в Telegram)\n"
         "Дополнительные данные для поиска (особые приметы и т.д.)"
     )
-
     return APPLICANT
 
 # ================== ДАНІ ЗАЯВНИКА ==================
@@ -124,14 +121,11 @@ async def applicant_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-
     c.execute(
         "INSERT INTO applications (user_id, user_name, relative_info, applicant_info) VALUES (?, ?, ?, ?)",
         (user_id, user_name, relative_text, applicant_text)
     )
-
     app_id = c.lastrowid
-
     conn.commit()
     conn.close()
 
@@ -145,10 +139,9 @@ async def applicant_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await context.bot.send_message(chat_id=ADMIN_ID, text=admin_message)
-
     await update.message.reply_text(
         f"✅ Заявка принята.\n\n"
-        f"📌 Номер вашей заявки: #{app_id}\n\n"
+        f"📌 Номер вашей заявки: #{app_id}\n"
         f"Сохраните этот номер для отслеживания запроса."
     )
 
@@ -159,11 +152,9 @@ async def applicant_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def forward_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sender_id = update.message.from_user.id
     text = update.message.text
-
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
-    # Користувач пише адміну
     if sender_id != ADMIN_ID:
         c.execute("SELECT id FROM applications WHERE user_id=? ORDER BY id DESC LIMIT 1", (sender_id,))
         row = c.fetchone()
@@ -171,23 +162,21 @@ async def forward_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
             app_id = row[0]
             header = f"📩 Повідомлення по заявці #{app_id}\nВід: {update.message.from_user.full_name}\n\n"
             await context.bot.send_message(chat_id=ADMIN_ID, text=header)
-            await context.bot.forward_message(
-                chat_id=ADMIN_ID,
-                from_chat_id=update.message.chat_id,
-                message_id=update.message.message_id
-            )
-    # Адмін відповідає
-    else:
+            await context.bot.forward_message(chat_id=ADMIN_ID, from_chat_id=update.message.chat_id, message_id=update.message.message_id)
+
+    else:  # Адмін відповідає
         app_id = None
         if update.message.reply_to_message:
             match = re.search(r"#(\d+)", update.message.reply_to_message.text)
             if match:
                 app_id = int(match.group(1))
+
         if not app_id:
             match = re.match(r"#(\d+)\s+(.*)", text)
             if match:
                 app_id = int(match.group(1))
                 text = match.group(2)
+
         if app_id:
             c.execute("SELECT user_id FROM applications WHERE id=?", (app_id,))
             row = c.fetchone()
@@ -201,7 +190,6 @@ async def forward_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     init_db()
-
     app = ApplicationBuilder().token(TOKEN).build()
 
     conv = ConversationHandler(
@@ -215,11 +203,9 @@ def main():
     )
 
     app.add_handler(conv)
-
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_messages))
 
     print("Bot started...")
-
     app.run_polling()
 
 if __name__ == "__main__":
