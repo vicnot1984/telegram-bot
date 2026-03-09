@@ -12,8 +12,8 @@ from telegram.ext import (
 # ================== НАЛАШТУВАННЯ ==================
 import os
 
-TOKEN = os.environ.get("TOKEN")
-print("TOKEN:", TOKEN)   # Тимчасово для перевірки
+TOKEN = os.environ.get("TELEGRAM_TOKEN")
+print("TELEGRAM_TOKEN:", TOKEN)   # Тимчасово для перевірки
 if not TOKEN:
     raise ValueError("TOKEN не встановлений")
     
