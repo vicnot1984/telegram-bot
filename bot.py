@@ -1,5 +1,7 @@
 import os
-print(os.environ)
+
+print("TOKEN:", os.environ.get("TOKEN"))
+print("ADMIN_ID:", os.environ.get("ADMIN_ID"))
 
 import sqlite3
 import logging
