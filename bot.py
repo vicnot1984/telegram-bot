@@ -138,18 +138,31 @@ async def forward_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     c = conn.cursor()
 
     # ---------------- КОРИСТУВАЧ ----------------
-    if sender_id != ADMIN_ID:
-        c.execute(
-            "SELECT id FROM applications WHERE user_id=? ORDER BY id DESC LIMIT 1",
-            (sender_id,)
+   if sender_id != ADMIN_ID:
+    c.execute(
+        "SELECT id FROM applications WHERE user_id=? ORDER BY id DESC LIMIT 1",
+        (sender_id,)
+    )
+    row = c.fetchone()
+
+    if row:
+        app_id = row[0]
+
+        header = (
+            f"📩 Повідомлення по заявці #{app_id}\n"
+            f"Від: {update.message.from_user.full_name}\n\n"
         )
-        row = c.fetchone()
-        if row:
-            app_id = row[0]
-            await context.bot.send_message(
-                chat_id=ADMIN_ID,
-                text=f"[Заявка #{app_id}] {update.message.from_user.full_name}:\n{text}"
-            )
+
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=header
+        )
+
+        await context.bot.forward_message(
+            chat_id=ADMIN_ID,
+            from_chat_id=update.message.chat_id,
+            message_id=update.message.message_id
+        )
 
     # ---------------- АДМІН ----------------
     else:
