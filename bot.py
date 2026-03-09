@@ -46,7 +46,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     keyboard = [
-        [InlineKeyboardButton("Запит на пошук", callback_data="search")]
+        [InlineKeyboardButton("Запрос на поиск", callback_data="search")]
     ]
 
     await update.message.reply_text(
@@ -119,7 +119,7 @@ async def applicant_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
     f"✅ Заявка принята.\n\n"
     f"📌 Номер вашей заявки: #{app_id}\n\n"
-    f"Сохраните этот номер для Збережіть цей номер для отслеживания."
+    f"Сохраните этот номер для отслеживания запроса."
 )
 
     return ConversationHandler.END
