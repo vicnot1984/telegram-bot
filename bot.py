@@ -10,7 +10,13 @@ from telegram.ext import (
 )
 
 # ================== НАЛАШТУВАННЯ ==================
-TOKEN = os.environ.get("TOKEN")
+import os
+
+TOKEN = os.environ.get("TELEGRAM_TOKEN")
+print("TOKEN:", TOKEN)   # Тимчасово для перевірки
+if not TOKEN:
+    raise ValueError("TOKEN не встановлений")
+    
 ADMIN_ID = 8700459830
 
 logging.basicConfig(
