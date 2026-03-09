@@ -1,0 +1,12 @@
+{
+  "build": {
+    "builder": "heroku/buildpacks:20"
+  },
+  "deploy": {
+    "startCommand": "python bot.py"
+  },
+  "env": {
+    "TOKEN": "8700459830:AAGy2eQ7KikacCEqWMX_JM3e4mBPna6vOMw",
+    "ADMIN_ID": "8700459830"
+  }
+}
