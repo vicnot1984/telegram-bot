@@ -11,7 +11,7 @@ from telegram.ext import (
 
 # ================== НАЛАШТУВАННЯ ==================
 TOKEN = os.environ.get("TOKEN")
-ADMIN_ID = 8007715299
+ADMIN_ID = 8700459830
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -50,7 +50,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        "Натисніть кнопку для подачі запиту:",
+        "Нажмите кнопку для подачи запроса:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
     return START
@@ -64,11 +64,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_reply_markup(reply_markup=None)
 
     await query.message.reply_text(
-        "Введіть дані про особу, яку розшукуєте:\n\n"
-        "ПІБ\n"
-        "Дата народження\n"
-        "Місце перебування\n"
-        "Дата та місце останнього контакту"
+        "Введите данные военнослужащего:\n\n"
+        "ФИО\n"
+        "Дата рождения\n"
+        "Воинская часть\n"
+        "Дата та место последнего контакта"
     )
     return RELATIVE
 
@@ -77,14 +77,14 @@ async def relative_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["relative_info"] = update.message.text
 
     await update.message.reply_text(
-        "Введіть ваші дані:\n\n"
-        "ПІБ\n"
-        "Дата народження\n"
-        "Місце проживання\n"
-        "Місце роботи\n"
-        "Ступінь спорідненості\n"
-        "Контакт у Telegram\n"
-        "Додаткові відомості"
+        "Введите ваши данные:\n\n"
+        "ФИО\n"
+        "Дата рождения\n"
+        "Место проживания (адрес)\n"
+        "Место работы\n"
+        "Степень родства\n"
+        "Номер телефона (для связи в Telegram)\n"
+        "Дополнительные данные для поиска (особые приметы и т.д.)"
     )
     return APPLICANT
 
@@ -117,9 +117,9 @@ async def applicant_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await context.bot.send_message(chat_id=ADMIN_ID, text=admin_message)
     await update.message.reply_text(
-    f"✅ Заявка прийнята.\n\n"
-    f"📌 Номер вашої заявки: #{app_id}\n\n"
-    f"Збережіть цей номер для відстеження."
+    f"✅ Заявка принята.\n\n"
+    f"📌 Номер вашей заявки: #{app_id}\n\n"
+    f"Сохраните этот номер для Збережіть цей номер для отслеживания."
 )
 
     return ConversationHandler.END
@@ -173,7 +173,7 @@ async def forward_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_id = row[0]
                 await context.bot.send_message(
                     chat_id=user_id,
-                    text=f"Відповідь по заявці #{app_id}:\n{text}"
+                    text=f"Ответ по заявке #{app_id}:\n{text}"
                 )
 
     conn.close()
