@@ -11,16 +11,17 @@ from telegram.ext import (
 
 # ================== НАЛАШТУВАННЯ ==================
 
-TOKEN = os.environ.get("TOKEN")
-ADMIN_ID = os.environ.get("ADMIN_ID")
+import os
 
-if not TOKEN or TOKEN == "TEST_TOKEN":
+TOKEN = os.environ.get("TOKEN")
+if not TOKEN:
     raise ValueError("❌ TOKEN не встановлений або недійсний! Отримайте токен у @BotFather.")
 
+ADMIN_ID = os.environ.get("ADMIN_ID")
 if not ADMIN_ID:
-    raise ValueError("❌ ADMIN_ID не встановлений! Вкажіть свій Telegram ID.")
+    raise ValueError("❌ ADMIN_ID не встановлений!")
 
-ADMIN_ID = int(ADMIN_ID)
+ADMIN_ID = int(ADMIN_ID)  # перетворимо у число
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
